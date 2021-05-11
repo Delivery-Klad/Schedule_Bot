@@ -312,7 +312,11 @@ def get_week_schedule(user_id, week, group):
                 except TypeError:
                     pass
                 except Exception as er:
-                    error_log(er)
+                    if "line 1 column 1" in str(er):
+                        text = "Сегодня воскресенье" if day == 6 else "Не удается связаться с API"
+                        bot.send_message(user_id, f"{sm}<b>{text}</b>", parse_mode="HTML")
+                    else:
+                        error_log(er)
             rez += "------------------------\n"
     except Exception as er:
         error_log(er)
@@ -395,14 +399,7 @@ def handler_text(message):
                     error_log(er)
                     bot.send_message(user_id, f"{sm}<b>Неверный ввод</b>", parse_mode="HTML")
             elif "week" in message.text.lower() or commands[2] in message.text.lower():
-                try:
-                    get_week_schedule(user_id, "week", group)
-                except Exception as er:
-                    if "line 1 column 1" in str(er):
-                        text = "Сегодня воскресенье" if day == 6 else "Не удается связаться с API"
-                        send_message(user_id, f"{sm}{text}")
-                    else:
-                        error_log(er)
+                get_week_schedule(user_id, "week", group)
         elif "week" in message.text.lower() or "неделя" in message.text.lower():
             get_week(message)
         else:
