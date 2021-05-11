@@ -390,7 +390,14 @@ def handler_text(message):
                     else:
                         error_log(er)
             elif "next_week" in message.text.lower():
-                get_week_schedule(user_id, "next_week", group)
+                try:
+                    get_week_schedule(user_id, "next_week", group)
+                except Exception as er:
+                    if "line 1 column 1" in str(er):
+                        text = "Сегодня воскресенье" if day == 6 else "Не удается связаться с API"
+                        bot.send_message(user_id, f"{sm}<b>{text}</b>", parse_mode="HTML")
+                    else:
+                        error_log(er)
             elif "weeknum" in message.text.lower():
                 try:
                     week = int(message.text.split()[1])
@@ -399,7 +406,14 @@ def handler_text(message):
                     error_log(er)
                     bot.send_message(user_id, f"{sm}<b>Неверный ввод</b>", parse_mode="HTML")
             elif "week" in message.text.lower() or commands[2] in message.text.lower():
-                get_week_schedule(user_id, "week", group)
+                try:
+                    get_week_schedule(user_id, "week", group)
+                except Exception as er:
+                    if "line 1 column 1" in str(er):
+                        text = "Сегодня воскресенье" if day == 6 else "Не удается связаться с API"
+                        bot.send_message(user_id, f"{sm}<b>{text}</b>", parse_mode="HTML")
+                    else:
+                        error_log(er)
         elif "week" in message.text.lower() or "неделя" in message.text.lower():
             get_week(message)
         else:
