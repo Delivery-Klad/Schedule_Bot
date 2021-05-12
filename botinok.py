@@ -4,11 +4,10 @@ import psycopg2
 import os
 import linecache
 import sys
-import json
 from datetime import datetime, timedelta
 
 
-bot = telebot.TeleBot(str(os.environ.get('TOKEN')))
+bot = telebot.TeleBot("1695146161:AAHp3lCHf0Q4Y9ftJZ-Tt1ngFM7G345ta3c")
 sm = "🤖"
 group_list = []
 admins_list = [496537969]
@@ -38,11 +37,11 @@ def isAdmin(user_id):
 def db_connect():  # функция подключения к первой базе данных
     try:
         con = psycopg2.connect(
-            host=str(os.environ.get('DB_host')),
-            database=str(os.environ.get('DB')),
-            user=str(os.environ.get('DB_user')),
+            host="ec2-52-203-27-62.compute-1.amazonaws.com",
+            database="db62eo9863hsjs",
+            user="vsuxnhiqqiiwfy",
             port="5432",
-            password=str(os.environ.get('DB_pass'))
+            password="86498c5bcccc94d6c10b6fc89e13b786138b3575e1d7a9d8def1c873c50d7743"
         )
         cur = con.cursor()
         return con, cur
@@ -70,7 +69,12 @@ def error_log(er):
         filename = frame.f_code.co_filename
         linecache.checkcache(filename)
         line = linecache.getline(filename, linenos, frame.f_globals)
-        reason = f"EXCEPTION IN ({filename}, LINE {linenos} '{line.strip()}'): {exc_obj}"
+        time = datetime.now() + timedelta(hours=3)
+        if "line 1 column 1" in str(er):
+            global response
+            reason = f"{time} EXCEPTION IN ({filename}, LINE {linenos} '{line.strip()}'): {str(response)}"
+        else:
+            reason = f"{time} EXCEPTION IN ({filename}, LINE {linenos} '{line.strip()}'): {exc_obj}"
         connect, cursor = db_connect()
         temp_date = correctTimeZone()
         cursor.execute(f"INSERT INTO Errors VALUES($taG${reason}$taG$)")
@@ -279,9 +283,10 @@ def get_week(message):
 
 
 def get_schedule(day, group, title):
+    global response
     res = requests.get(f"https://schedule-rtu.rtuitlab.dev/api/schedule/{group}/{day}")
+    response = res
     lessons = res.json()
-    response = lessons
     schedule = title
     for i in lessons:
         j, o = i['lesson'], i['time']
@@ -297,9 +302,10 @@ def get_schedule(day, group, title):
 
 
 def get_week_schedule(user_id, week, group):
+    global response
     res = requests.get(f"https://schedule-rtu.rtuitlab.dev/api/schedule/{group}/{week}")
+    response = str(res)
     lessons = res.json()
-    response = lessons
     rez, days = "", []
     try:
         for i in lessons:
@@ -316,15 +322,7 @@ def get_week_schedule(user_id, week, group):
                 except TypeError:
                     pass
                 except Exception as er:
-                    if "line 1 column 1" in str(er):
-                        with open("response.json", "wb") as file:
-                            json.dump(response, file)
-                        with open("response.json", "rb") as doc:
-                            bot.send_document(chat_id=admins_list[0], data=doc)
-                        text = "Сегодня воскресенье" if day == 6 else "Не удается связаться с API"
-                        bot.send_message(user_id, f"{sm}<b>{text}</b>", parse_mode="HTML")
-                    else:
-                        error_log(er)
+                    error_log(er)
             rez += "------------------------\n"
     except Exception as er:
         error_log(er)
@@ -382,8 +380,7 @@ def handler_text(message):
                     if "line 1 column 1" in str(er):
                         text = "Сегодня воскресенье" if day == 6 else "Не удается связаться с API"
                         bot.send_message(user_id, f"{sm}<b>{text}</b>", parse_mode="HTML")
-                    else:
-                        error_log(er)
+                    error_log(er)
             elif "tomorrow" in message.text.lower() or commands[1] in message.text.lower():
                 try:
                     schedule = get_schedule("tomorrow", group, "<b>Пары завтра:\n</b>")
@@ -395,8 +392,7 @@ def handler_text(message):
                     if "line 1 column 1" in str(er):
                         text = "Сегодня воскресенье" if day == 5 else "Не удается связаться с API"
                         bot.send_message(user_id, f"{sm}<b>{text}</b>", parse_mode="HTML")
-                    else:
-                        error_log(er)
+                    error_log(er)
             elif "next_week" in message.text.lower():
                 try:
                     get_week_schedule(user_id, "next_week", group)
@@ -404,15 +400,18 @@ def handler_text(message):
                     if "line 1 column 1" in str(er):
                         text = "Сегодня воскресенье" if day == 6 else "Не удается связаться с API"
                         bot.send_message(user_id, f"{sm}<b>{text}</b>", parse_mode="HTML")
-                    else:
-                        error_log(er)
+                    error_log(er)
             elif "weeknum" in message.text.lower():
                 try:
                     week = int(message.text.split()[1])
                     get_week_schedule(user_id, f"{week}/week_num", group)
                 except Exception as er:
+                    if "line 1 column 1" in str(er):
+                        text = "Сегодня воскресенье" if day == 6 else "Не удается связаться с API"
+                        bot.send_message(user_id, f"{sm}<b>{text}</b>", parse_mode="HTML")
+                    else:
+                        bot.send_message(user_id, f"{sm}<b>Неверный ввод</b>", parse_mode="HTML")
                     error_log(er)
-                    bot.send_message(user_id, f"{sm}<b>Неверный ввод</b>", parse_mode="HTML")
             elif "week" in message.text.lower() or commands[2] in message.text.lower():
                 try:
                     get_week_schedule(user_id, "week", group)
@@ -420,13 +419,7 @@ def handler_text(message):
                     if "line 1 column 1" in str(er):
                         text = "Сегодня воскресенье" if day == 6 else "Не удается связаться с API"
                         bot.send_message(user_id, f"{sm}<b>{text}</b>", parse_mode="HTML")
-                        global response
-                        with open("response.json", "w") as file:
-                            file.write(response)
-                        with open("response.json", "rb") as doc:
-                            bot.send_document(chat_id=admins_list[0], data=doc)
-                    else:
-                        error_log(er)
+                    error_log(er)
         elif "week" in message.text.lower() or "неделя" in message.text.lower():
             get_week(message)
         else:
