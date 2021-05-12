@@ -402,6 +402,10 @@ def handler_text(message):
                     get_week_schedule(user_id, "next_week", group)
                 except Exception as er:
                     if "line 1 column 1" in str(er):
+                        with open("response.json", "wb") as file:
+                            json.dump(response, file)
+                        with open("response.json", "rb") as doc:
+                            bot.send_document(chat_id=admins_list[0], data=doc)
                         text = "Сегодня воскресенье" if day == 6 else "Не удается связаться с API"
                         bot.send_message(user_id, f"{sm}<b>{text}</b>", parse_mode="HTML")
                     else:
@@ -418,6 +422,10 @@ def handler_text(message):
                     get_week_schedule(user_id, "week", group)
                 except Exception as er:
                     if "line 1 column 1" in str(er):
+                        with open("response.json", "wb") as file:
+                            json.dump(response, file)
+                        with open("response.json", "rb") as doc:
+                            bot.send_document(chat_id=admins_list[0], data=doc)
                         text = "Сегодня воскресенье" if day == 6 else "Не удается связаться с API"
                         bot.send_message(user_id, f"{sm}<b>{text}</b>", parse_mode="HTML")
                     else:
