@@ -4,6 +4,7 @@ import psycopg2
 import os
 import linecache
 import sys
+import json
 from datetime import datetime, timedelta
 
 
@@ -23,6 +24,7 @@ lesson_dict = {"9:": "1", "10": "2", "12": "3", "14": "4", "16": "5", "18": "6",
 time_dict = {"9:": "🕘", "10": "🕦", "12": "🕐", "14": "🕝", "16": "🕟", "18": "🕕", "19": "🕢", "20": "🕘"}
 delimiter = "------------------------------------------------"
 time_difference = 3
+response = ""
 print(bot.get_me())
 
 
@@ -279,6 +281,7 @@ def get_week(message):
 def get_schedule(day, group, title):
     res = requests.get(f"https://schedule-rtu.rtuitlab.dev/api/schedule/{group}/{day}")
     lessons = res.json()
+    response = lessons
     schedule = title
     for i in lessons:
         j, o = i['lesson'], i['time']
@@ -296,6 +299,7 @@ def get_schedule(day, group, title):
 def get_week_schedule(user_id, week, group):
     res = requests.get(f"https://schedule-rtu.rtuitlab.dev/api/schedule/{group}/{week}")
     lessons = res.json()
+    response = lessons
     rez, days = "", []
     try:
         for i in lessons:
@@ -313,6 +317,10 @@ def get_week_schedule(user_id, week, group):
                     pass
                 except Exception as er:
                     if "line 1 column 1" in str(er):
+                        with open("response.json", "wb") as file:
+                            json.dump(response, file)
+                        with open("response.json", "rb") as doc:
+                            bot.send_document(chat_id=admins_list[0], data=doc)
                         text = "Сегодня воскресенье" if day == 6 else "Не удается связаться с API"
                         bot.send_message(user_id, f"{sm}<b>{text}</b>", parse_mode="HTML")
                     else:
