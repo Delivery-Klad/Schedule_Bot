@@ -7,7 +7,7 @@ import sys
 from datetime import datetime, timedelta
 
 
-bot = telebot.TeleBot("1695146161:AAHp3lCHf0Q4Y9ftJZ-Tt1ngFM7G345ta3c")
+bot = telebot.TeleBot(str(os.environ.get('TOKEN')))
 sm = "🤖"
 group_list = []
 admins_list = [496537969]
@@ -40,7 +40,7 @@ def db_connect():  # функция подключения к первой ба�
             host=str(os.environ.get('DB_host')),
             database=str(os.environ.get('DB')),
             user=str(os.environ.get('DB_user')),
-            port="5432",
+            port=str(os.environ.get('DB_port')),
             password=str(os.environ.get('DB_pass'))
         )
         cur = con.cursor()
