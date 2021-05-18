@@ -456,6 +456,7 @@ def handler_text(message):
 
 
 create_tables()
+print("Бот запущен!")
 try:
     while True:
         try:
