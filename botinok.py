@@ -10,22 +10,22 @@ from datetime import datetime, timedelta
 def validator():
     if os.environ.get('TOKEN') is None:
         print("Не найдена переменная 'TOKEN'. Завершение работы...")
-        sys.exit()
+        exit(0)
     if os.environ.get('DB_host') is None:
         print("Не найдена переменная 'DB_host'. Завершение работы...")
-        sys.exit()
+        exit(0)
     if os.environ.get('DB') is None:
         print("Не найдена переменная 'DB'. Завершение работы...")
-        sys.exit()
+        exit(0)
     if os.environ.get('DB_user') is None:
         print("Не найдена переменная 'DB_user'. Завершение работы...")
-        sys.exit()
+        exit(0)
     if os.environ.get('DB_port') is None:
         print("Не найдена переменная 'DB_port'. Завершение работы...")
-        sys.exit()
+        exit(0)
     if os.environ.get('DB_pass') is None:
         print("Не найдена переменная 'DB_pass'. Завершение работы...")
-        sys.exit()
+        exit(0)
 
 
 validator()
