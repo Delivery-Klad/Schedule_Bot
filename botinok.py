@@ -4,6 +4,10 @@ import psycopg2
 import os
 import linecache
 import sys
+import json
+import time
+import schedule
+from threading import Thread
 from datetime import datetime, timedelta
 
 
@@ -29,7 +33,7 @@ def validator():
 
 
 validator()
-bot = telebot.TeleBot(str(os.environ.get('TOKEN')))
+bot = telebot.TeleBot("1074352529:AAEIKKcGDpFtQt-7NNm0EYnxZiau9oARZAo")
 sm = "🤖"
 group_list = []
 admins_list = [496537969]
@@ -50,33 +54,37 @@ print(bot.get_me())
 
 
 def isAdmin(user_id):
-    if user_id in admins_list:
-        return True
-    else:
-        return False
+    return True if user_id in admins_list else False
 
 
-def db_connect():  # функция подключения к первой базе данных
+def db_connect():
     try:
         con = psycopg2.connect(
-            host=str(os.environ.get('DB_host')),
-            database=str(os.environ.get('DB')),
-            user=str(os.environ.get('DB_user')),
-            port=str(os.environ.get('DB_port')),
-            password=str(os.environ.get('DB_pass'))
+            host="ec2-52-203-27-62.compute-1.amazonaws.com",
+            database="db62eo9863hsjs",
+            user="vsuxnhiqqiiwfy",
+            port="5432",
+            password="86498c5bcccc94d6c10b6fc89e13b786138b3575e1d7a9d8def1c873c50d7743"
         )
         cur = con.cursor()
         return con, cur
     except Exception as er:
         print(er)
+        return None, None
 
 
 def create_tables():
     try:
+        print("Создание таблиц...")
         connect, cursor = db_connect()
+        if connect is None or cursor is None:
+            print("Я потерял БД, кто найдет оставьте на охране (не получилось подключиться к бд)")
+            return
         cursor.execute("CREATE TABLE IF NOT EXISTS users(username TEXT, first_name TEXT,"
                        "last_name TEXT, grp TEXT, ids BIGINT)")
         cursor.execute("CREATE TABLE IF NOT EXISTS errors(reason TEXT)")
+        cursor.execute("SELECT COUNT(ids) FROM users")
+        print(f"Пользователей в базе {cursor.fetchone()[0]}")
         connect.commit()
         cursor.close()
         connect.close()
@@ -138,6 +146,10 @@ def handler_db(message):
     sql_request = "COPY (SELECT * FROM users) TO STDOUT WITH CSV HEADER"
     if isAdmin(message.from_user.id):
         connect, cursor = db_connect()
+        if connect is None or cursor is None:
+            bot.send_message(message.from_user.id, f"{sm}Я потерял БД, кто найдет оставьте на охране и повторите "
+                                                   f"попытку позже")
+            return
         with open("temp/users.csv", "w") as output_file:
             cursor.copy_expert(sql_request, output_file)
         with open("temp/users.csv", "rb") as doc:
@@ -154,6 +166,10 @@ def handler_errors(message):
         sql_request = "COPY (SELECT * FROM errors) TO STDOUT WITH CSV HEADER"
         if isAdmin(message.from_user.id):
             connect, cursor = db_connect()
+            if connect is None or cursor is None:
+                bot.send_message(message.from_user.id, f"{sm}Я потерял БД, кто найдет оставьте на охране и повторите "
+                                                       f"попытку позже")
+                return
             with open("temp/errors.csv", "w") as output_file:
                 cursor.copy_expert(sql_request, output_file)
             with open("temp/errors.csv", "rb") as doc:
@@ -170,11 +186,6 @@ def handler_errors(message):
             connect.close()
     except Exception as er:
         error_log(er)
-
-
-@bot.message_handler(commands=['help'])
-def handler_help(message):
-    pass
 
 
 @bot.message_handler(commands=['start'])
@@ -233,6 +244,44 @@ def handler_group(message):
             error_log(err)
 
 
+def cache():
+    print("Caching schedule...")
+    failed, local_groups = 0, 0
+    try:
+        os.mkdir("cache")
+    except FileExistsError:
+        pass
+    try:
+        connect, cursor = db_connect()
+        if connect is None or cursor is None:
+            bot.send_message(admins_list[0], f"{sm}Я потерял БД, кто найдет оставьте на охране и повторите попытку позже")
+            return
+        cursor.execute("SELECT DISTINCT grp FROM users")
+        local_groups = cursor.fetchall()
+        for i in local_groups:
+            res = requests.get(f"https://schedule-rtu.rtuitlab.dev/api/schedule/{i[0]}/week")
+            if res.status_code != 200:
+                failed += 1
+                print(f"Caching failed {res} Group '{i[0]}'")
+            else:
+                print(f"Caching success {res} Group '{i[0]}'")
+                lessons = res.json()
+                with open(f"cache/{i[0]}.json", "w") as file:
+                    json.dump(lessons, file)
+                time.sleep(0.1)
+        bot.send_message(admins_list[0], f"Caching success! \n{failed}/{len(local_groups)} failed")
+        try:
+            with open("cache/ИКБО-08-18.json", "rb") as doc:
+                bot.send_document(admins_list[0], doc)
+        except Exception as er:
+            error_log(er)
+    except Exception as er:
+        error_log(er)
+    if failed == len(local_groups):
+        time.sleep(3600)
+        cache()
+
+
 def sort_days(days):
     temp, day = [], ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
     for i in days:
@@ -252,7 +301,7 @@ def number_of_lesson(lsn):
         return "? пара"
 
 
-def get_teacher_ico(name):
+def get_teacher_icon(name):
     try:
         symbol = name.split(' ', 1)[0]
         return "👩‍🏫" if symbol[len(symbol) - 1] == "а" else "👨‍🏫"
@@ -260,10 +309,10 @@ def get_teacher_ico(name):
         return ""
 
 
-def get_time_ico(time):
+def get_time_icon(local_time):
     global time_dict
     try:
-        return time_dict[time[:2]]
+        return time_dict[local_time[:2]]
     except Exception as er:
         error_log(er)
         return "🕐"
@@ -272,6 +321,9 @@ def get_time_ico(time):
 def set_group(message, user_id, group):
     try:
         connect, cursor = db_connect()
+        if connect is None or cursor is None:
+            bot.send_message(user_id, f"{sm}Я потерял БД, кто найдет оставьте на охране и повторите попытку позже")
+            return
         cursor.execute(f"SELECT count(ids) FROM users WHERE ids={user_id}")
         res = cursor.fetchall()[0][0]
         if res == 0:
@@ -313,25 +365,39 @@ def get_schedule(day, group, title):
     res = requests.get(f"https://schedule-rtu.rtuitlab.dev/api/schedule/{group}/{day}")
     response = res
     lessons = res.json()
-    schedule = title
+    group_schedule = title
     for i in lessons:
         j, o = i['lesson'], i['time']
         try:
-            schedule += f"<b>{number_of_lesson(o['start'])} (<code>{j['classRoom']}</code>" \
-                   f"{get_time_ico(o['start'])}{o['start']} - {o['end']})</b>\n{j['name']} " \
-                   f"({j['type']})\n{get_teacher_ico(j['teacher'])} {j['teacher']}\n\n"
+            group_schedule += f"<b>{number_of_lesson(o['start'])} (<code>{j['classRoom']}</code>" \
+                              f"{get_time_icon(o['start'])}{o['start']} - {o['end']})</b>\n{j['name']} " \
+                              f"({j['type']})\n{get_teacher_icon(j['teacher'])} {j['teacher']}\n\n"
         except TypeError:
             pass
         except Exception as er:
             error_log(er)
-    return schedule
+    return group_schedule
 
 
 def get_week_schedule(user_id, week, group):
     global response
+    day = datetime.today().weekday()
     res = requests.get(f"https://schedule-rtu.rtuitlab.dev/api/schedule/{group}/{week}")
     response = str(res)
-    lessons = res.json()
+    try:
+        lessons = res.json()
+    except Exception as er:
+        if "line 1 column 1" in str(er):
+            text = "Сегодня воскресенье" if day == 6 else "Не удается связаться с API\nПроверяю кэшированное расписание"
+            bot.send_message(user_id, f"{sm}<b>{text}</b>", parse_mode="HTML")
+    if res.status_code == 503:
+        try:
+            print(f"Поиск кэшированного расписания для группы '{group}'")
+            with open(f"cache/{group}.json") as file:
+                lessons = json.load(file)
+        except FileNotFoundError:
+            bot.send_message(user_id, f"{sm}Кэшированое расписание для вашей группы не найдено")
+            return
     rez, days = "", []
     try:
         for i in lessons:
@@ -343,8 +409,8 @@ def get_week_schedule(user_id, week, group):
                 j, o = k['lesson'], k['time']
                 try:
                     rez += f"<b>{number_of_lesson(o['start'])} (<code>{j['classRoom']}</code>" \
-                           f"{get_time_ico(o['start'])}{o['start']} - {o['end']})</b>\n{j['name']} " \
-                           f"({j['type']})\n{get_teacher_ico(j['teacher'])} {j['teacher']}\n\n"
+                           f"{get_time_icon(o['start'])}{o['start']} - {o['end']})</b>\n{j['name']} " \
+                           f"({j['type']})\n{get_teacher_icon(j['teacher'])} {j['teacher']}\n\n"
                 except TypeError:
                     pass
                 except Exception as er:
@@ -378,6 +444,10 @@ def handler_text(message):
             text = "/group" if message.chat.type == "private" else "/group (группа)"
             try:
                 connect, cursor = db_connect()
+                if connect is None or cursor is None:
+                    bot.send_message(admins_list[0],
+                                     f"{sm}Я потерял БД, кто найдет оставьте на охране и повторите попытку позже")
+                    return
                 cursor.execute(f"SELECT grp FROM users WHERE ids={user_id}")
                 try:
                     group = cursor.fetchone()[0]
@@ -397,26 +467,30 @@ def handler_text(message):
                 return
             if "today" in message.text.lower() or commands[0] in message.text.lower():
                 try:
-                    schedule = get_schedule("today", group, "<b>Пары сегодня:\n</b>")
-                    if len(schedule) > 50:
-                        bot.send_message(user_id, schedule, parse_mode="HTML")
+                    group_schedule = get_schedule("today", group, "<b>Пары сегодня:\n</b>")
+                    if len(group_schedule) > 50:
+                        bot.send_message(user_id, group_schedule, parse_mode="HTML")
                     else:
                         bot.send_message(user_id, f"{sm}<b>Пар не обнаружено</b>", parse_mode="HTML")
                 except Exception as er:
                     if "line 1 column 1" in str(er):
-                        text = "Сегодня воскресенье" if day == 6 else "Не удается связаться с API"
+                        text = "Сегодня воскресенье" if day == 6 else "Не удается связаться с API\n/week - чтобы " \
+                                                                      "посмотреть кэшированное расписание на " \
+                                                                      "текущую неделю"
                         bot.send_message(user_id, f"{sm}<b>{text}</b>", parse_mode="HTML")
                     error_log(er)
             elif "tomorrow" in message.text.lower() or commands[1] in message.text.lower():
                 try:
-                    schedule = get_schedule("tomorrow", group, "<b>Пары завтра:\n</b>")
-                    if len(schedule) > 50:
-                        bot.send_message(user_id, schedule, parse_mode="HTML")
+                    group_schedule = get_schedule("tomorrow", group, "<b>Пары завтра:\n</b>")
+                    if len(group_schedule) > 50:
+                        bot.send_message(user_id, group_schedule, parse_mode="HTML")
                     else:
                         bot.send_message(user_id, f"{sm}<b>Пар не обнаружено</b>", parse_mode="HTML")
                 except Exception as er:
                     if "line 1 column 1" in str(er):
-                        text = "Сегодня воскресенье" if day == 5 else "Не удается связаться с API"
+                        text = "Сегодня воскресенье" if day == 5 else "Не удается связаться с API\n/week - чтобы " \
+                                                                      "посмотреть кэшированное расписание на " \
+                                                                      "текущую неделю"
                         bot.send_message(user_id, f"{sm}<b>{text}</b>", parse_mode="HTML")
                     error_log(er)
             elif "next_week" in message.text.lower():
@@ -424,7 +498,9 @@ def handler_text(message):
                     get_week_schedule(user_id, "next_week", group)
                 except Exception as er:
                     if "line 1 column 1" in str(er):
-                        text = "Сегодня воскресенье" if day == 6 else "Не удается связаться с API"
+                        text = "Сегодня воскресенье" if day == 6 else "Не удается связаться с API\n/week - чтобы " \
+                                                                      "посмотреть кэшированное расписание на " \
+                                                                      "текущую неделю"
                         bot.send_message(user_id, f"{sm}<b>{text}</b>", parse_mode="HTML")
                     error_log(er)
             elif "weeknum" in message.text.lower():
@@ -433,7 +509,9 @@ def handler_text(message):
                     get_week_schedule(user_id, f"{week}/week_num", group)
                 except Exception as er:
                     if "line 1 column 1" in str(er):
-                        text = "Сегодня воскресенье" if day == 6 else "Не удается связаться с API"
+                        text = "Сегодня воскресенье" if day == 6 else "Не удается связаться с API\n/week - чтобы " \
+                                                                      "посмотреть кэшированное расписание на " \
+                                                                      "текущую неделю"
                         bot.send_message(user_id, f"{sm}<b>{text}</b>", parse_mode="HTML")
                     else:
                         bot.send_message(user_id, f"{sm}<b>Неверный ввод</b>", parse_mode="HTML")
@@ -442,9 +520,6 @@ def handler_text(message):
                 try:
                     get_week_schedule(user_id, "week", group)
                 except Exception as er:
-                    if "line 1 column 1" in str(er):
-                        text = "Сегодня воскресенье" if day == 6 else "Не удается связаться с API"
-                        bot.send_message(user_id, f"{sm}<b>{text}</b>", parse_mode="HTML")
                     error_log(er)
         elif "week" in message.text.lower() or "неделя" in message.text.lower():
             get_week(message)
@@ -455,7 +530,18 @@ def handler_text(message):
         error_log(er)
 
 
+def create_thread():
+    while True:
+        schedule.run_pending()
+
+
 create_tables()
+start_cache = Thread(target=cache)
+start_cache.start()
+schedule.every().day.at("23:45").do(cache)
+cache_thread = Thread(target=create_thread)
+print("Расписание кэширования создано!")
+cache_thread.start()
 print("Бот запущен!")
 try:
     while True:
