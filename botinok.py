@@ -103,12 +103,12 @@ def error_log(er):
         filename = frame.f_code.co_filename
         linecache.checkcache(filename)
         line = linecache.getline(filename, linenos, frame.f_globals)
-        time = datetime.now() + timedelta(hours=3)
+        local_time = datetime.now() + timedelta(hours=3)
         if "line 1 column 1" in str(er):
             global response
-            reason = f"{time} EXCEPTION IN ({filename}, LINE {linenos} '{line.strip()}'): {str(response)}"
+            reason = f"{local_time} EXCEPTION IN ({filename}, LINE {linenos} '{line.strip()}'): {str(response)}"
         else:
-            reason = f"{time} EXCEPTION IN ({filename}, LINE {linenos} '{line.strip()}'): {exc_obj}"
+            reason = f"{local_time} EXCEPTION IN ({filename}, LINE {linenos} '{line.strip()}'): {exc_obj}"
         connect, cursor = db_connect()
         temp_date = correctTimeZone()
         cursor.execute(f"INSERT INTO Errors VALUES($taG${reason}$taG$)")
@@ -321,6 +321,13 @@ def get_time_icon(local_time):
 def set_group(message, user_id, group):
     try:
         connect, cursor = db_connect()
+        valid_group = group.split("-")
+        if len(valid_group) < 3:
+            bot.send_message(user_id, f"{sm}Неверный формат группы")
+            return
+        if not valid_group[1].isnumeric() and not valid_group[2].isnumeric():
+            bot.send_message(user_id, f"{sm}Неверный формат группы")
+            return
         if connect is None or cursor is None:
             bot.send_message(user_id, f"{sm}Я потерял БД, кто найдет оставьте на охране и повторите попытку позже")
             return
