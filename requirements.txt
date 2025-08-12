@@ -1,6 +1,6 @@
 PyTelegramBotAPI==3.7.6
-psycopg2-binary==2.8.6
+psycopg2-binary
 requests
 psycopg2
 schedule
-retry==0.9.2
+retry
